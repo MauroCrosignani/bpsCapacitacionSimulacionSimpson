@@ -1,0 +1,153 @@
+---
+title: "Desentrañando la Paradoja: ¿Son Efectivas Nuestras Acciones de Cobro?"
+subtitle: "Una Demostración Causal con Simulación Monte Carlo"
+author: "Equipo de Ciencia de Datos"
+date: today
+format:
+  revealjs:
+    theme: simple
+    slide-number: true
+    chalkboard: true
+---
+
+```{r setup, include=FALSE}
+# Carga de librerías necesarias
+library(tidyverse)
+library(bpsCapacitacionSimulacionSimpson)
+```
+
+## El Dilema: Predicción vs. Causa
+
+- Nuestro modelo predice con alta precisión *quién* va a regularizar su deuda.
+
+- Pero... ¿sabemos *qué acción* nuestra (ej. iniciar juicio) es más efectiva para *causar* que regularicen?
+
+::: {.notes}
+"Hola a todos. Como saben, nuestro equipo ha desarrollado un modelo predictivo de regularización de deudas que tiene un rendimiento excelente. Nos dice con mucha certeza qué empresas es probable que paguen en los próximos meses."
+
+"Sin embargo, hoy quiero plantear una pregunta diferente y fundamental: ¿estamos seguros de que las acciones que tomamos basándonos en esas predicciones son las más efectivas? Hay una diferencia crucial entre predecir un resultado y entender cómo influir en él."
+
+"Usando una analogía simple: el pronóstico del tiempo puede predecir la lluvia con un 99% de precisión, pero eso no nos dice si la acción de 'llevar un paraguas' es lo que realmente nos mantiene secos. Hoy vamos a explorar esa diferencia en nuestro contexto."
+:::
+
+```{r simulacion, include=FALSE, echo=FALSE, warning=FALSE, cache=TRUE}
+# Este chunk ejecuta toda la simulación de alta calidad.
+# Usamos cache=TRUE para no re-ejecutarlo en cada renderizado.
+
+# 1. Fijamos una semilla para reproducibilidad total
+set.seed(42)
+
+# --- PARÁMETROS DE PRODUCCIÓN ---
+N_SIMULACIONES <- 2000
+N_EMPRESAS <- 5000
+
+# 2. Ejecutamos la simulación (usando el prefijo del paquete para robustez)
+resultados_mc <- bpsCapacitacionSimulacionSimpson::ejecutar_simulacion_mc(
+  N_simulaciones = N_SIMULACIONES, 
+  n_empresas = N_EMPRESAS
+)
+
+# 3. Resumimos los resultados
+resumen_simulacion <- bpsCapacitacionSimulacionSimpson::resumir_simulacion(resultados_mc)
+
+# 4. Generamos el gráfico final
+grafico_paradoja <- bpsCapacitacionSimulacionSimpson::graficar_paradoja_simpson(
+  resumen_simulacion,
+  titulo = "El Efecto del Juicio se Invierte al Considerar la 'Cultura de Pago'",
+  subtitulo = "El resultado agregado esconde la verdadera efectividad de la intervención"
+)
+```
+
+## Nuestro Experimento: Un Universo Simulado
+
+- Para responder a la pregunta, creamos un "laboratorio digital".
+
+- Generamos miles de empresas sintéticas donde conocemos una variable clave que en la vida real es invisible: su **"cultura de pago"** intrínseca.
+
+::: {.notes}
+"Para investigar esto sin arriesgar recursos, decidimos crear un experimento mental, un universo simulado donde nosotros controlamos todas las reglas."
+
+"En este universo, cada empresa tiene una característica oculta que llamamos 'cultura de pago'. Algunas tienen una alta cultura de pago, es decir, tienen la intención de regularizar su situación pase lo que pase. Otras tienen una baja cultura de pago y son mucho menos propensas a hacerlo por sí mismas."
+
+"Esta 'cultura de pago' es el villano de nuestra historia. Es un 'factor de confusión', porque afecta tanto a los datos que sí vemos (como el riesgo de la empresa) como al resultado final (si pagan o no), y esto puede llevarnos a conclusiones erróneas."
+:::
+
+## A Primera Vista: El Juicio Parece Perjudicial
+
+```{r}
+#| echo: false
+#| fig-align: center
+#| out-width: "90%"
+
+print(grafico_paradoja)
+```
+
+::: {.notes}
+"Ahora, veamos los resultados de nuestra simulación. Este gráfico muestra el efecto promedio de iniciar un juicio sobre la probabilidad de que una empresa regularice su deuda."
+
+"Si nos fijamos únicamente en la barra gris, el 'Resultado General', la conclusión parece obvia y alarmante. El efecto es negativo. En promedio, las empresas a las que se les inicia juicio tienen una tasa de regularización *menor* que las que no."
+
+"La conclusión apresurada, y la que tomaríamos si solo miráramos los datos agregados, sería: 'Dejemos de iniciar juicios, son caros y contraproducentes'."
+
+"Pero, como les adelanté, esta conclusión es una ilusión. Es incorrecta. Permítanme mostrarles por qué."
+:::
+
+## La Revelación: La Historia se Invierte
+
+```{r}
+#| echo: false
+#| fig-align: center
+#| out-width: "90%"
+
+# Reutilizamos el mismo gráfico, la narrativa cambia en las notas.
+print(grafico_paradoja)
+```
+
+::: {.notes}
+"Este es exactamente el mismo gráfico, pero ahora vamos a usar nuestro conocimiento 'secreto' de la cultura de pago para interpretar las otras dos barras."
+
+"(Señalar la barra verde, la de arriba) Miren lo que pasa cuando nos enfocamos solo en las empresas con 'Baja Cultura de Pago', aquellas que probablemente no pagarían solas. Para ellas, iniciar un juicio tiene un efecto fuertemente *positivo*. Es la herramienta correcta, aplicada al grupo correcto, y funciona."
+
+"(Señalar la barra roja, la del medio) Ahora, para las empresas con 'Alta Cultura de Pago', aquellas que iban a pagar de todos modos, el efecto del juicio es negativo. Es una acción innecesaria y quizás hasta molesta para ellas."
+
+"El efecto negativo que vimos al principio era un promedio engañoso, una ilusión estadística conocida como la Paradoja de Simpson."
+:::
+
+## ¿Por Qué Ocurre Esto? El Sesgo de Selección
+
+- El modelo predictivo, al ser tan preciso, identificaba correctamente a las empresas de "Alta Cultura de Pago" y a las de "Baja Cultura de Pago".
+
+- Nuestra estrategia (racional) fue: **no iniciar juicio a los que probablemente pagarán solos.**
+
+- **Consecuencia:** Asignamos el "no tratamiento" al grupo "bueno" y el "tratamiento" (juicio) al grupo "malo", haciendo imposible una comparación justa.
+
+::: {.notes}
+"Entonces, ¿cuál es la explicación? No es que el modelo predictivo fallara. De hecho, hizo su trabajo perfectamente."
+
+"El problema surgió de la estrategia que construimos sobre esa predicción. De forma muy lógica, decidimos no gastar recursos en las empresas que el modelo nos decía que pagarían solas. Y decidimos enfocar nuestros esfuerzos (iniciar juicios) en las que parecían casos perdidos."
+
+"Al hacer esto, introdujimos un sesgo de selección masivo. Llenamos el grupo 'Sin Juicio' con las mejores empresas y el grupo 'Con Juicio' con las peores. Naturalmente, al comparar los promedios de estos dos grupos, el primero se veía mucho mejor, pero no por nuestra acción, sino por cómo estaban compuestos los grupos desde el principio."
+:::
+
+## Conclusiones y Próximos Pasos
+
+### Conclusiones
+
+1.  La **precisión predictiva no es suficiente** para medir el impacto causal de nuestras acciones.
+2.  Una estrategia basada únicamente en predicciones puede llevar a conclusiones erróneas y a una asignación de recursos subóptima.
+
+### Recomendación
+
+Debemos **complementar nuestros modelos predictivos con técnicas de inferencia causal**, como experimentos controlados (A/B testing), para medir el verdadero impacto de nuestras intervenciones.
+
+::: {.notes}
+"Para concluir, ¿qué hemos aprendido de este experimento?"
+
+"Primero, y más importante, que un modelo predictivo excelente no es una bola de cristal para la toma de decisiones. Nos dice qué es probable que pase, pero no nos dice cuál es la mejor manera de cambiar ese resultado. La precisión no implica causalidad."
+
+"Segundo, que si no somos cuidadosos, nuestras estrategias pueden introducir sesgos que nos lleven a conclusiones completamente equivocadas, como la que vimos hoy."
+
+"Nuestra recomendación no es abandonar los modelos predictivos, sino todo lo contrario: aumentarlos. Debemos empezar a incorporar prácticas de inferencia causal. La forma más sencilla y robusta de hacerlo es través de experimentos controlados, también conocidos como A/B testing. Proponemos lanzar un piloto en la próxima campaña de cobros para medir, sin lugar a dudas, el impacto real de nuestras acciones y asegurarnos de que estamos aplicando la estrategia correcta al grupo correcto."
+
+"Gracias."
+:::

@@ -47,3 +47,11 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+*.html
+*_cache/
+/presentacion_cache/
+/presentacion_files/
+
+# Archivos de {renv}
+renv/library/
