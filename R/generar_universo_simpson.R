@@ -62,9 +62,7 @@ generar_universo_simpson <- function(
     ) |>
     # Paso 2: Generar Covariables Observables (X)
     dplyr::mutate(
-      # Riesgo menor para cultura alta
       riesgo_deuda = rnorm(n = n_empresas, mean = 0.8 - cultura_pago_real * 0.5, sd = 0.2),
-      # Antigüedad más corta para cultura alta
       antiguedad_deuda_cat = sample(
         c("Corta", "Media", "Larga"),
         size = n_empresas,
@@ -74,21 +72,14 @@ generar_universo_simpson <- function(
     ) |>
     # Paso 3: Definir Resultados Potenciales (Y(0), Y(1))
     dplyr::mutate(
-      # Baseline log-odds de regularizar depende de cultura y riesgo
       logit_baseline = -1.5 + cultura_pago_real * 2.5 - riesgo_deuda * 1.2,
-      
-      # Log-odds con y sin juicio (el efecto del juicio depende de la cultura)
-      logit_prob_y0 = logit_baseline, # Sin juicio
+      logit_prob_y0 = logit_baseline,
       logit_prob_y1 = logit_baseline + dplyr::if_else(cultura_pago_real == 1,
                                                       efecto_juicio_cultura_alta,
                                                       efecto_juicio_cultura_baja
-      ), # Con juicio
-      
-      # Probabilidades
+      ),
       prob_y0 = plogis(logit_prob_y0),
       prob_y1 = plogis(logit_prob_y1),
-      
-      # Resultados potenciales (realizaciones)
       Y0 = rbinom(n = n_empresas, size = 1, prob = prob_y0),
       Y1 = rbinom(n = n_empresas, size = 1, prob = prob_y1)
     )
@@ -100,35 +91,34 @@ generar_universo_simpson <- function(
     message(paste("Paso 3: ATE real (Y1-Y0) en Cultura Alta:", round(ate_real_alta, 3)))
   }
   
-  # Paso 4: Simular el Modelo Predictivo del BPS (P)
-  # El modelo solo ve las X para predecir lo que pasaría sin intervención (Y0)
-  modelo_predictivo <- glm(
-    Y0 ~ riesgo_deuda + antiguedad_deuda_cat,
-    data = universo,
-    family = "binomial"
-  )
-  
-  prob_pred_sin_ruido <- predict(modelo_predictivo, type = "response")
-  ruido <- rnorm(n = n_empresas, mean = 0, sd = 0.03)
-  prob_pred_con_ruido <- prob_pred_sin_ruido + ruido
-  # Asegurar que la probabilidad esté en el rango [0, 1]
-  prob_predictiva_modelo <- pmin(1, pmax(0, prob_pred_con_ruido))
+  # Paso 4: Simular el Modelo Predictivo del BPS (P) - AHORA ROBUSTO
+  prob_predictiva_modelo <- tryCatch({
+    modelo_predictivo <- glm(
+      Y0 ~ riesgo_deuda + antiguedad_deuda_cat,
+      data = universo,
+      family = "binomial"
+    )
+    prob_pred_sin_ruido <- predict(modelo_predictivo, type = "response")
+    ruido <- rnorm(n = n_empresas, mean = 0, sd = 0.03)
+    prob_pred_con_ruido <- prob_pred_sin_ruido + ruido
+    pmin(1, pmax(0, prob_pred_con_ruido))
+  }, error = function(e) {
+    warning("El modelo predictivo no pudo ser ajustado. Causa: ", e$message)
+    return(NA_real_)
+  })
   
   universo <- universo |>
     dplyr::mutate(prob_predictiva_modelo = prob_predictiva_modelo)
   
   if (modo_depuracion) {
-    cor_pred <- cor(universo$prob_predictiva_modelo, universo$Y0)
+    cor_pred <- if (all(is.na(universo$prob_predictiva_modelo))) NA else cor(universo$prob_predictiva_modelo, universo$Y0, use = "complete.obs")
     message(paste("Paso 4: Correlación del modelo predictivo con Y0:", round(cor_pred, 3)))
   }
   
-  # Continuación del pipeline
   universo <- universo |>
-    # Paso 5: Asignar Tratamiento (`decision_juicio_BPS` - D)
     dplyr::mutate(
       decision_juicio_BPS = dplyr::if_else(prob_predictiva_modelo > 0.7, 0, 1)
     ) |>
-    # Paso 6: Generar Resultado Observado (Y)
     dplyr::mutate(
       regularizacion_observada = dplyr::if_else(
         decision_juicio_BPS == 1, Y1, Y0
@@ -136,11 +126,10 @@ generar_universo_simpson <- function(
     )
   
   if (modo_depuracion) {
-    n_juicio <- sum(universo$decision_juicio_BPS)
+    n_juicio <- sum(universo$decision_juicio_BPS, na.rm = TRUE)
     message(paste("Paso 5: Asignados a juicio", n_juicio, "empresas."))
   }
   
-  # --- 4. Formateo Final y Retorno ---
   universo_final <- universo |>
     dplyr::mutate(
       cultura_pago_real = factor(cultura_pago_real, levels = c(0, 1), labels = c("Baja", "Alta")),
