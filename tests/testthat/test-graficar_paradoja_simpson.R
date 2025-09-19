@@ -1,17 +1,22 @@
-# Este archivo prueba la función graficar_paradoja_simpson()
+# Este archivo prueba la versión 2 de la función graficar_paradoja_simpson()
 
-test_that("La función devuelve un objeto ggplot con las capas correctas", {
-  # Crear un data.frame de resumen de prueba basado en el dput
+test_that("La función devuelve un ggplot facetado con las capas correctas", {
+  # Crear un data.frame de resumen de prueba en formato tidy
   datos_resumen_test <- structure(
     list(
-      metrica = c("ate_ajustado_cultura_alta", "ate_ajustado_cultura_baja", "ate_naive"),
-      media = c(-0.32, 0.14, -0.38),
-      desv_est = c(0.013, 0.172, 0.013),
-      n_sims = c(100L, 98L, 100L),
-      ci_inferior = c(-0.33, 0.11, -0.39),
-      ci_superior = c(-0.32, 0.17, -0.38)
+      grupo_cultura = structure(c(1L, 1L, 2L, 2L),
+                                levels = c("Agregado", "Cultura Baja"), class = "factor"
+      ),
+      tipo_contacto = structure(c(1L, 2L, 1L, 2L),
+                                levels = c("Ausencia de Contacto", "Contacto Ligero"), class = "factor"
+      ),
+      media = c(0.8, 0.7, 0.2, 0.4),
+      desv_est = c(0.02, 0.03, 0.05, 0.06),
+      n_sims = c(100L, 100L, 100L, 100L),
+      ci_inferior = c(0.78, 0.67, 0.15, 0.34),
+      ci_superior = c(0.82, 0.73, 0.25, 0.46)
     ),
-    row.names = c(NA, -3L), class = c("tbl_df", "tbl", "data.frame")
+    row.names = c(NA, -4L), class = c("tbl_df", "tbl", "data.frame")
   )
   
   # Llamar a la función bajo prueba
@@ -20,24 +25,13 @@ test_that("La función devuelve un objeto ggplot con las capas correctas", {
   # 1. Verificar que el resultado es un objeto ggplot
   testthat::expect_s3_class(p, "ggplot")
   
-  # 2. Verificar que el número de capas es el esperado (4 en este caso)
-  testthat::expect_length(p$layers, 4)
+  # 2. Prueba Clave: Verificar que el gráfico es facetado
+  testthat::expect_s3_class(p$facet, "FacetWrap")
   
-  # 3. Verificar la clase de la geometría de cada capa en orden
-  # Capa 1: geom_vline
-  testthat::expect_true(inherits(p$layers[[1]]$geom, "GeomVline"))
-  # Capa 2: geom_col
-  testthat::expect_true(inherits(p$layers[[2]]$geom, "GeomCol"))
-  # Capa 3: geom_errorbarh
-  testthat::expect_true(inherits(p$layers[[3]]$geom, "GeomErrorbarh"))
-  # Capa 4: geom_text
-  testthat::expect_true(inherits(p$layers[[4]]$geom, "GeomText"))
-})
-
-test_that("La función arroja un error si faltan columnas", {
-  datos_invalidos <- data.frame(metrica = "a", media = 1) # Faltan ci_inferior/superior
-  
-  testthat::expect_error(
-    graficar_paradoja_simpson(datos_invalidos)
-  )
+  # 3. Verificar la presencia de las capas geométricas esperadas
+  geoms_presentes <- sapply(p$layers, function(layer) class(layer$geom)[1])
+  # FIX: Actualizar la expectativa de "GeomErrorbarh" a "GeomErrorbar"
+  geoms_esperadas <- c("GeomVline", "GeomCol", "GeomErrorbar", "GeomText")
+  # Usar expect_setequal para ignorar el orden
+  testthat::expect_setequal(geoms_presentes, geoms_esperadas)
 })

@@ -1,14 +1,14 @@
-#' Genera una Visualización de la Paradoja de Simpson
+#' Genera una Visualización Facetada de la Paradoja de Simpson (Versión 2)
 #'
 #' @description
-#' Esta función toma los resultados resumidos de la simulación Monte Carlo y
-#' genera un gráfico de barras con barras de error. El gráfico está diseñado
-#' para ilustrar de manera clara y persuasiva la Paradoja de Simpson,
-#' mostrando cómo el efecto de tratamiento agregado (naive) puede ser engañoso
-#' en comparación con los efectos segmentados.
+#' Esta función toma los resultados resumidos y tidy de la simulación Monte Carlo
+#' y genera un gráfico de barras facetado. El gráfico está diseñado para
+#' comparar de forma clara y directa el efecto de los diferentes tipos de contacto
+#' a través de los distintos subgrupos de cultura de pago, revelando así la
+#' Paradoja de Simpson en un formato visualmente intuitivo.
 #'
-#' @param datos_resumen Un `tibble` o `data.frame` que contiene los resultados
-#'   resumidos, usualmente la salida de `resumir_simulacion()`.
+#' @param datos_resumen Un `tibble` o `data.frame` en formato largo y tidy,
+#'   usualmente la salida de `resumir_simulacion()`.
 #' @param titulo El título principal del gráfico.
 #' @param subtitulo El subtítulo del gráfico, que puede usarse para añadir contexto.
 #'
@@ -21,85 +21,70 @@
 #' @examples
 #' try({ # try() para evitar errores en CRAN si los paquetes no están
 #'   # 1. Ejecutar y resumir una simulación
-#'   resumen <- resumir_simulacion(
-#'     ejecutar_simulacion_mc(N_simulaciones = 100, n_empresas = 1000)
+#'   resultados_mc <- ejecutar_simulacion_mc(
+#'     N_simulaciones = 10,
+#'     n_empresas_total = 10000
 #'   )
-#'   # 2. Generar el gráfico
+#'   resumen <- resumir_simulacion(resultados_mc)
+#'
+#'   # 2. Generar el gráfico facetado
 #'   grafico_paradoja <- graficar_paradoja_simpson(resumen)
 #'   print(grafico_paradoja)
 #' })
 graficar_paradoja_simpson <- function(
     datos_resumen,
-    titulo = "El Juicio Parece Contraproducente, Pero es Efectivo para el Grupo Correcto",
-    subtitulo = "Comparación del Efecto de Tratamiento Promedio (ATE) Agregado vs. Segmentado") {
+    titulo = "La Estrategia 'Óptima' Cambia Según el Segmento de Cliente",
+    subtitulo = "La tasa de regularización muestra que la mejor intervención no es la misma para todos") {
   # --- 1. Validación de Entradas ---
-  columnas_requeridas <- c("metrica", "media", "ci_inferior", "ci_superior")
+  columnas_requeridas <- c("grupo_cultura", "tipo_contacto", "media", "ci_inferior", "ci_superior")
   stopifnot(
     is.data.frame(datos_resumen),
     all(columnas_requeridas %in% names(datos_resumen))
   )
   
-  # --- 2. Preparación de Datos para Graficar ---
-  datos_preparados <- datos_resumen |>
-    dplyr::mutate(
-      # Crear etiquetas claras y ordenarlas para el gráfico
-      metrica_etiquetada = dplyr::case_when(
-        .data$metrica == "ate_naive" ~ "Resultado General (Agregado)",
-        .data$metrica == "ate_ajustado_cultura_baja" ~ "Efecto en Empresas de Cultura Baja",
-        .data$metrica == "ate_ajustado_cultura_alta" ~ "Efecto en Empresas de Cultura Alta",
-        TRUE ~ .data$metrica
-      ),
-      # Convertir a factor para controlar el orden en el eje Y
-      metrica_etiquetada = factor(.data$metrica_etiquetada, levels = c(
-        "Efecto en Empresas de Cultura Alta",
-        "Efecto en Empresas de Cultura Baja",
-        "Resultado General (Agregado)"
-      ))
-    )
-  
-  # --- 3. Construcción del Gráfico ggplot ---
+  # --- 2. Construcción del Gráfico ggplot Facetado ---
   plot <- ggplot2::ggplot(
-    datos_preparados,
-    ggplot2::aes(x = .data$media, y = .data$metrica_etiquetada, fill = .data$metrica_etiquetada)
+    datos_resumen,
+    ggplot2::aes(x = media, y = tipo_contacto, fill = tipo_contacto)
   ) +
-    # Línea vertical en x=0 para referencia de efecto nulo
+    ggplot2::facet_wrap(~grupo_cultura, ncol = 2) +
     ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
-    # Barras principales que muestran el ATE promedio
-    ggplot2::geom_col(width = 0.6) +
-    # Barras de error horizontales para el intervalo de confianza
-    ggplot2::geom_errorbarh(
-      ggplot2::aes(xmin = .data$ci_inferior, xmax = .data$ci_superior),
-      height = 0.2, linewidth = 0.6, color = "gray20"
+    ggplot2::geom_col(width = 0.7) +
+    # FIX: Usar geom_errorbar con orientation = "y" en lugar de la obsoleta geom_errorbarh
+    ggplot2::geom_errorbar(
+      ggplot2::aes(xmin = ci_inferior, xmax = ci_superior),
+      width = 0.25, linewidth = 0.5, color = "gray20", orientation = "y"
     ) +
-    # Etiqueta de texto con el valor de la media
     ggplot2::geom_text(
-      ggplot2::aes(label = round(.data$media, 2)),
-      hjust = dplyr::if_else(datos_preparados$media >= 0, -0.2, 1.2), # Posición del texto
+      ggplot2::aes(label = scales::percent(media, accuracy = 0.1)),
+      hjust = -0.15,
       color = "black",
       size = 3.5
     ) +
-    # --- 4. Estética y Diseño Ejecutivo ---
     ggplot2::scale_fill_manual(
       values = c(
-        "Resultado General (Agregado)" = "gray60",
-        "Efecto en Empresas de Cultura Baja" = "#00BFC4", # Verde azulado (positivo)
-        "Efecto en Empresas de Cultura Alta" = "#F8766D" # Rojo coral (negativo)
-      )
+        "Ausencia de Contacto" = "#F8766D",
+        "Contacto Ligero" = "#00BA38",
+        "Contacto Involucrado" = "#619CFF"
+      ),
+      guide = "none"
     ) +
+    ggplot2::scale_x_continuous(labels = scales::percent) +
     ggplot2::labs(
       title = titulo,
       subtitle = subtitulo,
-      x = "Efecto Promedio Estimado en la Tasa de Regularización (ATE)",
+      x = "Tasa de Regularización Promedio (Estimación de la Simulación)",
       y = NULL
     ) +
     ggplot2::theme_minimal(base_size = 14) +
     ggplot2::theme(
-      legend.position = "none",
       panel.grid.major.y = ggplot2::element_blank(),
       panel.grid.minor.x = ggplot2::element_blank(),
-      plot.title = ggplot2::element_text(face = "bold", size = 16),
+      strip.text = ggplot2::element_text(face = "bold", size = 12),
+      plot.title = ggplot2::element_text(face = "bold", size = 18),
       plot.subtitle = ggplot2::element_text(color = "gray30", margin = ggplot2::margin(b = 15)),
-      axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 10))
+      axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 10)),
+      axis.text.y = ggplot2::element_text(size = 11)
     )
   
   return(plot)
