@@ -1,145 +1,131 @@
-#' Genera un Universo de Datos para Demostrar la Paradoja de Simpson
+#' Genera un Universo de Datos Simulado para la Paradoja de Simpson (Versión 2)
 #'
 #' @description
-#' Esta función genera un data.frame (tibble) sintético que ilustra la
-#' Paradoja de Simpson en un contexto simulado de gestión de cobranzas.
-#' Crea un escenario donde una variable confusora no observada (`cultura_pago_real`)
-#' invierte la conclusión sobre la efectividad de una intervención (`decision_juicio_BPS`)
-#' en un resultado (`regularizacion_observada`).
+#' Esta función implementa un Proceso de Generación de Datos (DGP) avanzado para
+#' ilustrar la Paradoja de Simpson en un contexto de negocio realista para el BPS.
+#' Primero, genera una población grande de empresas y luego la filtra para
+#' obtener una "población objetivo" específica (ej. antigüedad de deuda mínima,
+#' sin contacto previo). Sobre esta población, asigna tratamientos multivaluados
+#' ("Ausencia de Contacto", "Contacto Ligero", "Contacto Involucrado") de forma
+#' sesgada, basándose en un modelo predictivo de alta precisión, para demostrar
+#' cómo las conclusiones a nivel agregado pueden ser engañosas.
 #'
-#' @param n_empresas Número total de empresas a simular.
+#' @param n_empresas_total Número total de empresas a generar en la población inicial,
+#'   antes del filtrado.
 #' @param semilla Un número entero para fijar la semilla aleatoria y garantizar la
 #'   reproducibilidad.
+#' @param umbral_antiguedad_meses La antigüedad mínima de la deuda (en meses) para que
+#'   una empresa sea incluida en la población objetivo.
 #' @param modo_depuracion Booleano. Si es `TRUE`, imprime mensajes de diagnóstico
 #'   intermedios durante la generación de datos.
-#' @param p_cultura_alta La probabilidad de que una empresa tenga una "Alta"
-#'   cultura de pago.
-#' @param efecto_juicio_cultura_baja El efecto causal real (en la escala log-odds)
-#'   de iniciar un juicio para empresas con "Baja" cultura de pago. Un valor
-#'   positivo significa que el juicio aumenta la probabilidad de regularización.
-#' @param efecto_juicio_cultura_alta El efecto causal real (en la escala log-odds)
-#'   de iniciar un juicio para empresas con "Alta" cultura de pago. Un valor
-#'   negativo significa que el juicio disminuye la probabilidad de regularización.
+#' @param p_baja Probabilidad de que una empresa en la población objetivo tenga
+#'   una "Baja" cultura de pago.
+#' @param p_media Probabilidad de que una empresa en la población objetivo tenga
+#'   una "Media" cultura de pago. La probabilidad de "Alta" se calcula como
+#'   `1 - p_baja - p_media`.
 #'
-#' @return Un `tibble` con `n_empresas` filas y las siguientes columnas:
-#'   `id_empresa`, `cultura_pago_real`, `riesgo_deuda`, `antiguedad_deuda_cat`,
-#'   `prob_predictiva_modelo`, `decision_juicio_BPS`, `regularizacion_observada`.
+#' @return Un `tibble` con la **población objetivo ya filtrada** y las siguientes
+#'   columnas: `id_empresa`, `cultura_pago_real`, `riesgo_deuda`,
+#'   `antiguedad_deuda_cat`, `prob_predictiva_modelo`, `tipo_contacto_BPS`,
+#'   `regularizacion_observada`.
 #'
 #' @export
 #'
 #' @examples
 #' try({ # try() para evitar errores en CRAN si los paquetes no están
-#'   universo_simulado <- generar_universo_simpson(n_empresas = 1000, semilla = 123)
-#'   head(universo_simulado)
+#'   universo_objetivo <- generar_universo_simpson(n_empresas_total = 10000)
+#'   head(universo_objetivo)
 #' })
 generar_universo_simpson <- function(
-    n_empresas = 10000,
+    n_empresas_total = 100000,
     semilla = 42,
+    umbral_antiguedad_meses = 12,
     modo_depuracion = FALSE,
-    p_cultura_alta = 0.5,
-    efecto_juicio_cultura_baja = 1.5,
-    efecto_juicio_cultura_alta = -1.0) {
+    p_baja = 0.2,
+    p_media = 0.5) {
+  
   # --- 1. Validación de Entradas ---
   stopifnot(
-    is.numeric(n_empresas), n_empresas > 0,
-    is.numeric(semilla),
-    is.logical(modo_depuracion),
-    is.numeric(p_cultura_alta), p_cultura_alta >= 0, p_cultura_alta <= 1
+    is.numeric(n_empresas_total), n_empresas_total > 0,
+    is.numeric(umbral_antiguedad_meses), umbral_antiguedad_meses > 0,
+    is.numeric(p_baja), p_baja > 0, p_baja < 1,
+    is.numeric(p_media), p_media > 0, p_media < 1,
+    (p_baja + p_media) < 1
   )
   
   # --- 2. Inicialización ---
   set.seed(semilla)
   
-  datos_base <- tibble::tibble(id_empresa = 1:n_empresas)
-  
-  if (modo_depuracion) message(paste("Paso 0: Creado tibble inicial con", n_empresas, "empresas."))
-  
   # --- 3. Proceso de Generación de Datos (DGP) ---
-  universo <- datos_base |>
-    # Paso 1: Generar `cultura_pago_real` (U - El Confounder)
+  poblacion_inicial <- tibble::tibble(id_empresa = 1:n_empresas_total) |>
     dplyr::mutate(
-      cultura_pago_real = rbinom(n = n_empresas, size = 1, prob = p_cultura_alta)
+      antiguedad_deuda_meses = runif(n_empresas_total, min = 1, max = 60),
+      fue_contactada_previamente = rbinom(n_empresas_total, size = 1, prob = 0.7)
+    )
+  if (modo_depuracion) message(paste("Paso 1-2: Generadas", nrow(poblacion_inicial), "empresas iniciales."))
+  
+  poblacion_objetivo <- poblacion_inicial |>
+    dplyr::filter(
+      .data$antiguedad_deuda_meses > umbral_antiguedad_meses,
+      .data$fue_contactada_previamente == 0
+    )
+  if (modo_depuracion) message(paste("Paso 3: Filtrada la población objetivo a", nrow(poblacion_objetivo), "empresas."))
+  
+  universo_final <- poblacion_objetivo |>
+    dplyr::mutate(
+      cultura_pago_real = sample(
+        c("Baja", "Media", "Alta"), size = dplyr::n(), replace = TRUE,
+        prob = c(p_baja, p_media, 1 - p_baja - p_media)
+      ) |> factor(levels = c("Baja", "Media", "Alta")),
+      riesgo_deuda = rnorm(dplyr::n(), mean = 2 - as.integer(.data$cultura_pago_real), sd = 0.5),
+      antiguedad_deuda_cat = dplyr::ntile(.data$antiguedad_deuda_meses, 2) |>
+        factor(levels = c(1, 2), labels = c("Antigua", "Muy Antigua"))
     ) |>
-    # Paso 2: Generar Covariables Observables (X)
     dplyr::mutate(
-      riesgo_deuda = rnorm(n = n_empresas, mean = 0.8 - cultura_pago_real * 0.5, sd = 0.2),
-      antiguedad_deuda_cat = sample(
-        c("Corta", "Media", "Larga"),
-        size = n_empresas,
-        replace = TRUE,
-        prob = if (cultura_pago_real[1] == 1) c(0.6, 0.3, 0.1) else c(0.1, 0.3, 0.6)
+      # FIX 2: Aumentamos el efecto de la cultura de pago para forzar la paradoja
+      logit_baseline = -2.5 + (as.integer(.data$cultura_pago_real) * 2.5) - (.data$riesgo_deuda * 0.5),
+      efecto_ligero = 0.8,
+      efecto_involucrado = 1.8 + dplyr::if_else(.data$cultura_pago_real == "Baja", 1.2, 0),
+      Y_ausencia = rbinom(dplyr::n(), 1, plogis(.data$logit_baseline)),
+      Y_ligero = rbinom(dplyr::n(), 1, plogis(.data$logit_baseline + .data$efecto_ligero)),
+      Y_involucrado = rbinom(dplyr::n(), 1, plogis(.data$logit_baseline + .data$efecto_involucrado))
+    ) |>
+    dplyr::mutate(
+      prob_predictiva_modelo = {
+        prob_pred <- tryCatch({
+          # FIX 1: Usar pick() para ser compatible con dplyr >= 1.1.0
+          modelo_predictivo <- glm(Y_ausencia ~ riesgo_deuda + antiguedad_deuda_cat, data = dplyr::pick(dplyr::everything()), family = "binomial")
+          predict(modelo_predictivo, type = "response")
+        }, error = function(e) {
+          warning("GLM falló: ", e$message)
+          rep(NA_real_, dplyr::n())
+        })
+        ruido <- rnorm(dplyr::n(), mean = 0, sd = 0.03)
+        pmin(1, pmax(0, prob_pred + ruido))
+      }
+    ) |>
+    dplyr::mutate(
+      tipo_contacto_BPS = dplyr::case_when(
+        is.na(.data$prob_predictiva_modelo) ~ "Contacto Involucrado",
+        .data$prob_predictiva_modelo > 0.8 ~ "Ausencia de Contacto",
+        .data$prob_predictiva_modelo > 0.5 ~ "Contacto Ligero",
+        TRUE ~ "Contacto Involucrado"
       )
     ) |>
-    # Paso 3: Definir Resultados Potenciales (Y(0), Y(1))
     dplyr::mutate(
-      logit_baseline = -1.5 + cultura_pago_real * 2.5 - riesgo_deuda * 1.2,
-      logit_prob_y0 = logit_baseline,
-      logit_prob_y1 = logit_baseline + dplyr::if_else(cultura_pago_real == 1,
-                                                      efecto_juicio_cultura_alta,
-                                                      efecto_juicio_cultura_baja
+      regularizacion_observada = dplyr::case_when(
+        .data$tipo_contacto_BPS == "Ausencia de Contacto" ~ .data$Y_ausencia,
+        .data$tipo_contacto_BPS == "Contacto Ligero" ~ .data$Y_ligero,
+        .data$tipo_contacto_BPS == "Contacto Involucrado" ~ .data$Y_involucrado
       ),
-      prob_y0 = plogis(logit_prob_y0),
-      prob_y1 = plogis(logit_prob_y1),
-      Y0 = rbinom(n = n_empresas, size = 1, prob = prob_y0),
-      Y1 = rbinom(n = n_empresas, size = 1, prob = prob_y1)
-    )
-  
-  if (modo_depuracion) {
-    ate_real_baja <- mean(universo$Y1[universo$cultura_pago_real == 0] - universo$Y0[universo$cultura_pago_real == 0])
-    ate_real_alta <- mean(universo$Y1[universo$cultura_pago_real == 1] - universo$Y0[universo$cultura_pago_real == 1])
-    message(paste("Paso 3: ATE real (Y1-Y0) en Cultura Baja:", round(ate_real_baja, 3)))
-    message(paste("Paso 3: ATE real (Y1-Y0) en Cultura Alta:", round(ate_real_alta, 3)))
-  }
-  
-  # Paso 4: Simular el Modelo Predictivo del BPS (P) - AHORA ROBUSTO
-  prob_predictiva_modelo <- tryCatch({
-    modelo_predictivo <- glm(
-      Y0 ~ riesgo_deuda + antiguedad_deuda_cat,
-      data = universo,
-      family = "binomial"
-    )
-    prob_pred_sin_ruido <- predict(modelo_predictivo, type = "response")
-    ruido <- rnorm(n = n_empresas, mean = 0, sd = 0.03)
-    prob_pred_con_ruido <- prob_pred_sin_ruido + ruido
-    pmin(1, pmax(0, prob_pred_con_ruido))
-  }, error = function(e) {
-    warning("El modelo predictivo no pudo ser ajustado. Causa: ", e$message)
-    return(NA_real_)
-  })
-  
-  universo <- universo |>
-    dplyr::mutate(prob_predictiva_modelo = prob_predictiva_modelo)
-  
-  if (modo_depuracion) {
-    cor_pred <- if (all(is.na(universo$prob_predictiva_modelo))) NA else cor(universo$prob_predictiva_modelo, universo$Y0, use = "complete.obs")
-    message(paste("Paso 4: Correlación del modelo predictivo con Y0:", round(cor_pred, 3)))
-  }
-  
-  universo <- universo |>
-    dplyr::mutate(
-      decision_juicio_BPS = dplyr::if_else(prob_predictiva_modelo > 0.7, 0, 1)
-    ) |>
-    dplyr::mutate(
-      regularizacion_observada = dplyr::if_else(
-        decision_juicio_BPS == 1, Y1, Y0
-      )
-    )
-  
-  if (modo_depuracion) {
-    n_juicio <- sum(universo$decision_juicio_BPS, na.rm = TRUE)
-    message(paste("Paso 5: Asignados a juicio", n_juicio, "empresas."))
-  }
-  
-  universo_final <- universo |>
-    dplyr::mutate(
-      cultura_pago_real = factor(cultura_pago_real, levels = c(0, 1), labels = c("Baja", "Alta")),
-      antiguedad_deuda_cat = factor(antiguedad_deuda_cat, levels = c("Corta", "Media", "Larga")),
-      decision_juicio_BPS = factor(decision_juicio_BPS, levels = c(0, 1), labels = c("No Juicio", "Juicio"))
+      tipo_contacto_BPS = factor(.data$tipo_contacto_BPS, levels = c("Ausencia de Contacto", "Contacto Ligero", "Contacto Involucrado"))
     ) |>
     dplyr::select(
       id_empresa, cultura_pago_real, riesgo_deuda, antiguedad_deuda_cat,
-      prob_predictiva_modelo, decision_juicio_BPS, regularizacion_observada
+      prob_predictiva_modelo, tipo_contacto_BPS, regularizacion_observada
     )
+  
+  if (modo_depuracion) message(paste("Paso 8: Asignados tratamientos:\n", paste(capture.output(table(universo_final$tipo_contacto_BPS)), collapse = "\n")))
   
   return(universo_final)
 }
