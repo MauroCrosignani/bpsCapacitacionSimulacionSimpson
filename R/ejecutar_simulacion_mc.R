@@ -1,96 +1,92 @@
-#' Ejecuta una Simulación Monte Carlo de la Paradoja de Simpson
+#' Ejecuta una Simulación Monte Carlo de la Paradoja de Simpson (Versión 2)
 #'
 #' @description
-#' Esta función orquesta una simulación Monte Carlo. Llama repetidamente a la
-#' función `generar_universo_simpson()` para generar múltiples universos de datos
-#' y calcula métricas clave para cada uno. El objetivo es evaluar la
-#' distribución de los estimadores del Efecto de Tratamiento Promedio (ATE)
-#' y demostrar la consistencia de la paradoja.
+#' Esta función orquesta una simulación Monte Carlo utilizando la nueva versión
+#' del DGP (`generar_universo_simpson`). Llama repetidamente a la función para
+#' generar múltiples universos de datos y calcula las tasas de regularización
+#' brutas para cada combinación de tipo de contacto y subgrupo de cultura de pago.
 #'
-#' @param N_simulaciones El número de veces que se repetirá la simulación (el
-#'   número de universos a generar).
+#' @param N_simulaciones El número de veces que se repetirá la simulación.
 #' @param ... Argumentos adicionales que se pasarán directamente a
-#'   `generar_universo_simpson()`. Esto permite configurar parámetros como
-#'   `n_empresas`, `p_cultura_alta`, etc., para toda la simulación.
+#'   `generar_universo_simpson()`, como `n_empresas_total`.
 #'
 #' @return Un `tibble` donde cada fila corresponde a una simulación exitosa,
-#'   con las siguientes columnas:
+#'   con 13 columnas:
 #'   - `id_simulacion`: Identificador numérico de la simulación.
-#'   - `ate_naive`: El ATE "ingenuo" calculado a nivel agregado.
-#'   - `ate_ajustado_cultura_baja`: El ATE calculado para el subgrupo de "Baja" cultura de pago.
-#'   - `ate_ajustado_cultura_alta`: El ATE calculado para el subgrupo de "Alta" cultura de pago.
+#'   - `tasa_ausencia_de_contacto_agg`, `tasa_contacto_ligero_agg`, `tasa_contacto_involucrado_agg`: Tasas a nivel agregado.
+#'   - `tasa_ausencia_de_contacto_baja`, `tasa_contacto_ligero_baja`, `tasa_contacto_involucrado_baja`: Tasas para cultura "Baja".
+#'   - `tasa_ausencia_de_contacto_media`, `tasa_contacto_ligero_media`, `tasa_contacto_involucrado_media`: Tasas para cultura "Media".
+#'   - `tasa_ausencia_de_contacto_alta`, `tasa_contacto_ligero_alta`, `tasa_contacto_involucrado_alta`: Tasas para cultura "Alta".
 #'
 #' @export
 #'
 #' @examples
-#' # Ejecuta una simulación pequeña con 10 iteraciones y 500 empresas por universo
 #' try({ # try() para evitar errores en CRAN si los paquetes no están
-#'   resultados <- ejecutar_simulacion_mc(N_simulaciones = 10, n_empresas = 500)
-#'   print(resultados)
-#'   # Calcula el ATE naive promedio a lo largo de todas las simulaciones
-#'   mean(resultados$ate_naive)
+#'   resultados <- ejecutar_simulacion_mc(N_simulaciones = 10, n_empresas_total = 5000)
+#'   print(head(resultados))
 #' })
 ejecutar_simulacion_mc <- function(N_simulaciones = 1000, ...) {
   # --- 1. Validación de Entradas ---
   stopifnot(
     is.numeric(N_simulaciones),
     N_simulaciones > 0,
-    N_simulaciones == round(N_simulaciones) # Asegurar que es entero
+    N_simulaciones == round(N_simulaciones)
   )
   
   # --- 2. Definición de la Lógica de una Simulación ---
-  # Función auxiliar que se ejecutará para cada iteración
+  
+  # Función auxiliar robusta para calcular tasas
+  calcular_tasas <- function(df) {
+    niveles_tratamiento <- c("Ausencia de Contacto", "Contacto Ligero", "Contacto Involucrado")
+    
+    tasas <- df |>
+      dplyr::group_by(tipo_contacto_BPS) |>
+      dplyr::summarise(tasa_reg = mean(regularizacion_observada, na.rm = TRUE), .groups = "drop") |>
+      tidyr::complete(tipo_contacto_BPS = niveles_tratamiento) |>
+      tidyr::pivot_wider(names_from = tipo_contacto_BPS, values_from = tasa_reg)
+    
+    names(tasas) <- paste0("tasa_", tolower(gsub(" ", "_", names(tasas))))
+    return(tasas)
+  }
+  
   una_simulacion <- function(id, ...) {
     universo <- generar_universo_simpson(semilla = id, ...)
     
-    calcular_ate <- function(df) {
-      if (nrow(df) == 0) return(NA_real_)
-      
-      tasas <- df |>
-        # FIX: Usar .data[["col"]] para programación robusta y evitar warnings
-        dplyr::group_by(.data[["decision_juicio_BPS"]]) |>
-        dplyr::summarise(tasa_reg = mean(.data[["regularizacion_observada"]], na.rm = TRUE), .groups = "drop") |>
-        tidyr::pivot_wider(names_from = "decision_juicio_BPS", values_from = "tasa_reg")
-      
-      tasa_juicio <- if ("Juicio" %in% names(tasas)) tasas$Juicio else NA_real_
-      tasa_no_juicio <- if ("No Juicio" %in% names(tasas)) tasas$`No Juicio` else NA_real_
-      
-      return(tasa_juicio - tasa_no_juicio)
-    }
+    tasas_agg <- calcular_tasas(universo) |>
+      dplyr::rename_with(~ paste0(., "_agg"))
     
-    ate_naive <- calcular_ate(universo)
-    ate_baja <- calcular_ate(dplyr::filter(universo, .data$cultura_pago_real == "Baja"))
-    ate_alta <- calcular_ate(dplyr::filter(universo, .data$cultura_pago_real == "Alta"))
+    tasas_baja <- calcular_tasas(dplyr::filter(universo, cultura_pago_real == "Baja")) |>
+      dplyr::rename_with(~ paste0(., "_baja"))
     
-    tibble::tibble(
-      id_simulacion = id,
-      ate_naive = ate_naive,
-      ate_ajustado_cultura_baja = ate_baja,
-      ate_ajustado_cultura_alta = ate_alta
-    )
+    tasas_media <- calcular_tasas(dplyr::filter(universo, cultura_pago_real == "Media")) |>
+      dplyr::rename_with(~ paste0(., "_media"))
+    
+    tasas_alta <- calcular_tasas(dplyr::filter(universo, cultura_pago_real == "Alta")) |>
+      dplyr::rename_with(~ paste0(., "_alta"))
+    
+    dplyr::bind_cols(
+      tasas_agg, tasas_baja, tasas_media, tasas_alta
+    ) |>
+      dplyr::mutate(id_simulacion = id)
   }
   
+  # --- 3. Ejecución Robusta de la Simulación ---
   una_simulacion_robusta <- purrr::possibly(una_simulacion, otherwise = NULL, quiet = FALSE)
   
   if (requireNamespace("progress", quietly = TRUE)) {
     pb <- progress::progress_bar$new(
-      format = "Simulando [:bar] :percent [ETA: :eta]",
-      total = N_simulaciones,
-      width = 60
+      format = "Simulando [:bar] :percent [ETA: :eta]", total = N_simulaciones, width = 60
     )
-    # FIX: La función tick_progress no necesita argumentos
-    tick_progress <- function() {
-      pb$tick()
-    }
+    tick_progress <- function() pb$tick()
   } else {
-    tick_progress <- function() {} # Función vacía si {progress} no está
+    tick_progress <- function() {}
   }
   
   message(paste("Iniciando simulación Monte Carlo con", N_simulaciones, "iteraciones..."))
   
   resultados <- purrr::map_dfr(1:N_simulaciones, function(id) {
     res <- una_simulacion_robusta(id, ...)
-    tick_progress() # La llamada ahora coincide con la definición
+    tick_progress()
     return(res)
   })
   
