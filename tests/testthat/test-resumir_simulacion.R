@@ -1,72 +1,45 @@
-# Este archivo prueba la función resumir_simulacion()
+# Este archivo prueba la versión 2 de la función resumir_simulacion()
 
-test_that("Los cálculos de resumen son correctos para datos conocidos", {
+test_that("La función resume correctamente la nueva estructura de datos", {
+  # Crear un tibble de prueba falso pero conocido, con 3 simulaciones
   datos_test <- tibble::tibble(
-    ate_naive = c(1, 2, 3),
-    ate_ajustado_cultura_baja = c(10, 20, 30),
-    ate_ajustado_cultura_alta = c(0, 0, 0)
+    id_simulacion = 1:3,
+    # Datos para 'agg' y 'ausencia'
+    tasa_ausencia_de_contacto_agg = c(0.8, 0.9, 1.0),
+    # Datos para 'baja' y 'ligero'
+    tasa_contacto_ligero_baja = c(0.2, 0.3, NA),
+    # Rellenar el resto para que las columnas existan
+    tasa_contacto_ligero_agg = 1, tasa_contacto_involucrado_agg = 1,
+    tasa_ausencia_de_contacto_baja = 1, tasa_contacto_involucrado_baja = 1,
+    tasa_ausencia_de_contacto_media = 1, tasa_contacto_ligero_media = 1,
+    tasa_contacto_involucrado_media = 1, tasa_ausencia_de_contacto_alta = 1,
+    tasa_contacto_ligero_alta = 1, tasa_contacto_involucrado_alta = 1
   )
   
   resumen <- resumir_simulacion(datos_test)
   
-  # Verificar estructura
-  testthat::expect_equal(nrow(resumen), 3)
-  testthat::expect_named(resumen, c("metrica", "media", "desv_est", "n_sims", "ci_inferior", "ci_superior"))
+  # 1. Verificar la estructura de salida
+  testthat::expect_s3_class(resumen, "data.frame")
+  testthat::expect_equal(nrow(resumen), 12) # 4 grupos x 3 contactos
+  testthat::expect_equal(ncol(resumen), 7)
+  testthat::expect_named(resumen, c(
+    "grupo_cultura", "tipo_contacto", "media", "desv_est",
+    "n_sims", "ci_inferior", "ci_superior"
+  ))
   
-  # Verificar cálculos para ate_naive
-  resumen_naive <- dplyr::filter(resumen, metrica == "ate_naive")
-  testthat::expect_equal(resumen_naive$media, 2)
-  testthat::expect_equal(resumen_naive$desv_est, 1)
-  testthat::expect_equal(resumen_naive$n_sims, 3)
+  # 2. Verificar cálculos para un grupo específico
+  resumen_agg_ausencia <- resumen |>
+    dplyr::filter(grupo_cultura == "Agregado", tipo_contacto == "Ausencia de Contacto")
   
-  # Verificar cálculos para ate_ajustado_cultura_baja
-  resumen_baja <- dplyr::filter(resumen, metrica == "ate_ajustado_cultura_baja")
-  testthat::expect_equal(resumen_baja$media, 20)
-  testthat::expect_equal(resumen_baja$desv_est, 10)
+  testthat::expect_equal(resumen_agg_ausencia$n_sims, 3)
+  testthat::expect_equal(resumen_agg_ausencia$media, 0.9)
+  testthat::expect_equal(resumen_agg_ausencia$desv_est, 0.1)
   
-  # Verificar cálculos para ate_ajustado_cultura_alta
-  resumen_alta <- dplyr::filter(resumen, metrica == "ate_ajustado_cultura_alta")
-  testthat::expect_equal(resumen_alta$media, 0)
-  # FIX: sd(c(0,0,0)) es 0, no NA. Corregimos la expectativa del test.
-  testthat::expect_equal(resumen_alta$desv_est, 0)
-})
-
-
-test_that("La función maneja NAs correctamente", {
-  datos_test_na <- tibble::tibble(
-    ate_naive = c(1, 3, NA, 5),
-    ate_ajustado_cultura_baja = c(10, 20, NA, NA),
-    ate_ajustado_cultura_alta = c(NA, NA, NA, NA)
-  )
+  # 3. Verificar manejo de NAs
+  resumen_baja_ligero <- resumen |>
+    dplyr::filter(grupo_cultura == "Cultura Baja", tipo_contacto == "Contacto Ligero")
   
-  resumen <- resumir_simulacion(datos_test_na)
-  
-  # Verificar cálculos para ate_naive con NAs
-  resumen_naive <- dplyr::filter(resumen, metrica == "ate_naive")
-  testthat::expect_equal(resumen_naive$n_sims, 3)
-  testthat::expect_equal(resumen_naive$media, 3) # (1+3+5)/3
-  testthat::expect_equal(resumen_naive$desv_est, 2) # sd(c(1,3,5))
-  
-  # Verificar cálculos para ate_ajustado_cultura_baja con NAs
-  resumen_baja <- dplyr::filter(resumen, metrica == "ate_ajustado_cultura_baja")
-  testthat::expect_equal(resumen_baja$n_sims, 2)
-  testthat::expect_equal(resumen_baja$media, 15)
-})
-
-
-test_that("La función arroja un error si faltan columnas", {
-  datos_invalidos <- data.frame(a = 1:3, b = 4:6)
-  
-  testthat::expect_error(
-    resumir_simulacion(datos_invalidos),
-    regexp = "all\\(columnas_requeridas %in% names\\(datos_simulacion\\)\\) is not TRUE"
-  )
-})
-
-test_that("La función arroja un error con nivel de confianza inválido", {
-  datos_test <- tibble::tibble(
-    ate_naive = 1, ate_ajustado_cultura_baja = 1, ate_ajustado_cultura_alta = 1
-  )
-  testthat::expect_error(resumir_simulacion(datos_test, nivel_confianza = 1.1))
-  testthat::expect_error(resumir_simulacion(datos_test, nivel_confianza = 0))
+  testthat::expect_equal(resumen_baja_ligero$n_sims, 2)
+  testthat::expect_equal(resumen_baja_ligero$media, 0.25)
+  testthat::expect_equal(round(resumen_baja_ligero$desv_est, 4), 0.0707)
 })

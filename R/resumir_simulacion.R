@@ -1,20 +1,19 @@
-#' Resume los Resultados de una Simulación Monte Carlo
+#' Resume los Resultados de una Simulación Monte Carlo (Versión 2)
 #'
 #' @description
-#' Esta función toma el data.frame de resultados generado por
-#' `ejecutar_simulacion_mc()` y calcula estadísticas descriptivas clave para
-#' cada métrica (ATE naive, ATE ajustados). El resultado es una tabla de
-#' resumen concisa, ideal para informes y visualizaciones.
+#' Esta función toma el data.frame ancho de resultados generado por la nueva
+#' versión de `ejecutar_simulacion_mc()` y lo transforma en un formato largo y
+#' tidy. Calcula estadísticas descriptivas clave (media, sd, IC) para cada
+#' una de las 12 combinaciones de métricas (tipo de contacto x subgrupo de cultura).
 #'
 #' @param datos_simulacion Un `tibble` o `data.frame` que contiene los resultados
-#'   de la simulación, con columnas como `ate_naive`, `ate_ajustado_cultura_baja`,
-#'   y `ate_ajustado_cultura_alta`.
+#'   de la simulación, con 12 columnas de tasas como `tasa_ausencia_de_contacto_agg`.
 #' @param nivel_confianza El nivel de confianza para el cálculo de los
 #'   intervalos (por ejemplo, 0.95 para un 95% de confianza).
 #'
-#' @return Un `tibble` de resumen con una fila por cada métrica y las
-#'   siguientes columnas: `metrica`, `media`, `desv_est`, `n_sims`,
-#'   `ci_inferior`, `ci_superior`.
+#' @return Un `tibble` de resumen largo y tidy con una fila por cada métrica/subgrupo
+#'   y las siguientes columnas: `grupo_cultura`, `tipo_contacto`, `media`,
+#'   `desv_est`, `n_sims`, `ci_inferior`, `ci_superior`.
 #'
 #' @importFrom stats qnorm sd
 #' @export
@@ -22,14 +21,22 @@
 #' @examples
 #' try({ # try() para evitar errores en CRAN si los paquetes no están
 #'   # 1. Ejecutar una simulación de ejemplo
-#'   resultados_mc <- ejecutar_simulacion_mc(N_simulaciones = 100, n_empresas = 500)
-#'   # 2. Resumir los resultados
+#'   resultados_mc <- ejecutar_simulacion_mc(
+#'     N_simulaciones = 10,
+#'     n_empresas_total = 5000
+#'   )
+#'   # 2. Resumir los resultados en formato tidy
 #'   resumen <- resumir_simulacion(resultados_mc)
 #'   print(resumen)
 #' })
 resumir_simulacion <- function(datos_simulacion, nivel_confianza = 0.95) {
   # --- 1. Validación de Entradas ---
-  columnas_requeridas <- c("ate_naive", "ate_ajustado_cultura_baja", "ate_ajustado_cultura_alta")
+  columnas_requeridas <- c(
+    "tasa_ausencia_de_contacto_agg", "tasa_contacto_ligero_agg", "tasa_contacto_involucrado_agg",
+    "tasa_ausencia_de_contacto_baja", "tasa_contacto_ligero_baja", "tasa_contacto_involucrado_baja",
+    "tasa_ausencia_de_contacto_media", "tasa_contacto_ligero_media", "tasa_contacto_involucrado_media",
+    "tasa_ausencia_de_contacto_alta", "tasa_contacto_ligero_alta", "tasa_contacto_involucrado_alta"
+  )
   stopifnot(
     is.data.frame(datos_simulacion),
     all(columnas_requeridas %in% names(datos_simulacion)),
@@ -40,29 +47,42 @@ resumir_simulacion <- function(datos_simulacion, nivel_confianza = 0.95) {
   z_score <- stats::qnorm(1 - (1 - nivel_confianza) / 2)
   
   resumen_df <- datos_simulacion |>
-    # Paso A: Pivotar a formato largo
     tidyr::pivot_longer(
-      cols = dplyr::all_of(columnas_requeridas),
-      names_to = "metrica",
-      values_to = "valor"
+      cols = dplyr::starts_with("tasa_"),
+      names_to = c(".value", "grupo_cultura"),
+      names_pattern = "tasa_(.*)_(.*)"
     ) |>
-    # Paso B: Agrupar por métrica
-    dplyr::group_by(.data$metrica) |>
-    # Paso C y D: Resumir y calcular IC
+    tidyr::pivot_longer(
+      cols = c("ausencia_de_contacto", "contacto_ligero", "contacto_involucrado"),
+      names_to = "tipo_contacto",
+      values_to = "tasa_reg"
+    ) |>
+    dplyr::group_by(grupo_cultura, tipo_contacto) |>
     dplyr::summarise(
-      media = mean(.data$valor, na.rm = TRUE),
-      desv_est = stats::sd(.data$valor, na.rm = TRUE),
-      n_sims = sum(!is.na(.data$valor)),
-      .groups = "drop" # Desagrupar después del summarise
+      media = mean(tasa_reg, na.rm = TRUE),
+      desv_est = stats::sd(tasa_reg, na.rm = TRUE),
+      n_sims = sum(!is.na(tasa_reg)),
+      .groups = "drop"
     ) |>
     dplyr::mutate(
-      error_estandar = .data$desv_est / sqrt(.data$n_sims),
-      ci_inferior = .data$media - z_score * .data$error_estandar,
-      ci_superior = .data$media + z_score * .data$error_estandar
+      error_estandar = desv_est / sqrt(n_sims),
+      ci_inferior = media - z_score * error_estandar,
+      ci_superior = media + z_score * error_estandar
     ) |>
-    # Reordenar columnas para mayor claridad
+    dplyr::mutate(
+      grupo_cultura = dplyr::recode_factor(grupo_cultura,
+                                           "agg" = "Agregado", "baja" = "Cultura Baja",
+                                           "media" = "Cultura Media", "alta" = "Cultura Alta"
+      ),
+      tipo_contacto = dplyr::recode_factor(tipo_contacto,
+                                           "ausencia_de_contacto" = "Ausencia de Contacto",
+                                           "contacto_ligero" = "Contacto Ligero",
+                                           "contacto_involucrado" = "Contacto Involucrado"
+      )
+    ) |>
     dplyr::select(
-      "metrica", "media", "desv_est", "n_sims", "ci_inferior", "ci_superior"
+      grupo_cultura, tipo_contacto, media, desv_est,
+      n_sims, ci_inferior, ci_superior
     )
   
   return(resumen_df)
