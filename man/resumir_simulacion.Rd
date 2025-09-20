@@ -2,34 +2,36 @@
 % Please edit documentation in R/resumir_simulacion.R
 \name{resumir_simulacion}
 \alias{resumir_simulacion}
-\title{Resume los Resultados de una Simulación Monte Carlo}
+\title{Resume los Resultados de una Simulación Monte Carlo (Versión 2)}
 \usage{
 resumir_simulacion(datos_simulacion, nivel_confianza = 0.95)
 }
 \arguments{
 \item{datos_simulacion}{Un \code{tibble} o \code{data.frame} que contiene los resultados
-de la simulación, con columnas como \code{ate_naive}, \code{ate_ajustado_cultura_baja},
-y \code{ate_ajustado_cultura_alta}.}
+de la simulación, con 12 columnas de tasas como \code{tasa_ausencia_de_contacto_agg}.}
 
 \item{nivel_confianza}{El nivel de confianza para el cálculo de los
 intervalos (por ejemplo, 0.95 para un 95\% de confianza).}
 }
 \value{
-Un \code{tibble} de resumen con una fila por cada métrica y las
-siguientes columnas: \code{metrica}, \code{media}, \code{desv_est}, \code{n_sims},
-\code{ci_inferior}, \code{ci_superior}.
+Un \code{tibble} de resumen largo y tidy con una fila por cada métrica/subgrupo
+y las siguientes columnas: \code{grupo_cultura}, \code{tipo_contacto}, \code{media},
+\code{desv_est}, \code{n_sims}, \code{ci_inferior}, \code{ci_superior}.
 }
 \description{
-Esta función toma el data.frame de resultados generado por
-\code{ejecutar_simulacion_mc()} y calcula estadísticas descriptivas clave para
-cada métrica (ATE naive, ATE ajustados). El resultado es una tabla de
-resumen concisa, ideal para informes y visualizaciones.
+Esta función toma el data.frame ancho de resultados generado por la nueva
+versión de \code{ejecutar_simulacion_mc()} y lo transforma en un formato largo y
+tidy. Calcula estadísticas descriptivas clave (media, sd, IC) para cada
+una de las 12 combinaciones de métricas (tipo de contacto x subgrupo de cultura).
 }
 \examples{
 try({ # try() para evitar errores en CRAN si los paquetes no están
   # 1. Ejecutar una simulación de ejemplo
-  resultados_mc <- ejecutar_simulacion_mc(N_simulaciones = 100, n_empresas = 500)
-  # 2. Resumir los resultados
+  resultados_mc <- ejecutar_simulacion_mc(
+    N_simulaciones = 10,
+    n_empresas_total = 5000
+  )
+  # 2. Resumir los resultados en formato tidy
   resumen <- resumir_simulacion(resultados_mc)
   print(resumen)
 })

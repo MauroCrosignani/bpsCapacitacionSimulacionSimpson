@@ -1,6 +1,6 @@
 ---
-title: "Desentrañando la Paradoja: ¿Son Efectivas Nuestras Acciones de Cobro?"
-subtitle: "Una Demostración Causal con Simulación Monte Carlo"
+title: "Más Allá de la Predicción: Optimizando Estrategias de Contacto"
+subtitle: "Un Análisis Causal para el Segmento de 'Primer Contacto' del BPS"
 author: "Equipo de Ciencia de Datos"
 date: today
 format:
@@ -16,20 +16,6 @@ library(tidyverse)
 library(bpsCapacitacionSimulacionSimpson)
 ```
 
-## El Dilema: Predicción vs. Causa
-
-- Nuestro modelo predice con alta precisión *quién* va a regularizar su deuda.
-
-- Pero... ¿sabemos *qué acción* nuestra (ej. iniciar juicio) es más efectiva para *causar* que regularicen?
-
-::: {.notes}
-"Hola a todos. Como saben, nuestro equipo ha desarrollado un modelo predictivo de regularización de deudas que tiene un rendimiento excelente. Nos dice con mucha certeza qué empresas es probable que paguen en los próximos meses."
-
-"Sin embargo, hoy quiero plantear una pregunta diferente y fundamental: ¿estamos seguros de que las acciones que tomamos basándonos en esas predicciones son las más efectivas? Hay una diferencia crucial entre predecir un resultado y entender cómo influir en él."
-
-"Usando una analogía simple: el pronóstico del tiempo puede predecir la lluvia con un 99% de precisión, pero eso no nos dice si la acción de 'llevar un paraguas' es lo que realmente nos mantiene secos. Hoy vamos a explorar esa diferencia en nuestro contexto."
-:::
-
 ```{r simulacion, include=FALSE, echo=FALSE, warning=FALSE, cache=TRUE}
 # Este chunk ejecuta toda la simulación de alta calidad.
 # Usamos cache=TRUE para no re-ejecutarlo en cada renderizado.
@@ -37,117 +23,234 @@ library(bpsCapacitacionSimulacionSimpson)
 # 1. Fijamos una semilla para reproducibilidad total
 set.seed(42)
 
-# --- PARÁMETROS DE PRODUCCIÓN ---
-N_SIMULACIONES <- 2000
-N_EMPRESAS <- 5000
-
-# 2. Ejecutamos la simulación (usando el prefijo del paquete para robustez)
-resultados_mc <- bpsCapacitacionSimulacionSimpson::ejecutar_simulacion_mc(
-  N_simulaciones = N_SIMULACIONES, 
-  n_empresas = N_EMPRESAS
+# 2. Ejecutamos la simulación Monte Carlo
+resultados_mc <- ejecutar_simulacion_mc(
+  N_simulaciones = 2000,
+  n_empresas_total = 100000
 )
 
 # 3. Resumimos los resultados
-resumen_simulacion <- bpsCapacitacionSimulacionSimpson::resumir_simulacion(resultados_mc)
+resumen_simulacion <- resumir_simulacion(resultados_mc)
+```
 
-# 4. Generamos el gráfico final
-grafico_paradoja <- bpsCapacitacionSimulacionSimpson::graficar_paradoja_simpson(
-  resumen_simulacion,
-  titulo = "El Efecto del Juicio se Invierte al Considerar la 'Cultura de Pago'",
-  subtitulo = "El resultado agregado esconde la verdadera efectividad de la intervención"
+## Nuestro Foco: El Primer Contacto
+
+- Nos enfocamos en un segmento clave: empresas con deudas significativas (>12 meses) que aún no hemos contactado.
+
+- La pregunta clave: Para este grupo, ¿cuál es la acción inicial más efectiva? ¿Un contacto ligero? ¿Uno más involucrado? ¿O es mejor no hacer nada?
+
+::: {.notes}
+"Hola a todos. Hoy vamos a presentar los resultados de una simulación diseñada para responder a una pregunta muy específica y operativa: ¿cómo debemos iniciar el contacto con las empresas que tienen deudas importantes pero con las que nunca hemos hablado?"
+
+"Las opciones tienen costos muy diferentes. Un contacto ligero es barato, uno involucrado es caro, y no hacer nada tiene un costo de oportunidad. Necesitamos saber qué funciona mejor y para quién."
+:::
+
+## Nuestro Experimento: Un Universo Simulado y Realista
+
+- Creamos un "laboratorio digital" que imita este segmento.
+
+- Crucialmente, a cada empresa le asignamos una "cultura de pago" oculta (Baja, Media, Alta), algo que en la realidad solo podemos intuir.
+
+::: {.notes}
+"Para explorar estas opciones de forma segura, hemos construido una simulación. Este universo digital refleja las características de este segmento de 'primer contacto'."
+
+"La variable secreta que introducimos, la 'cultura de pago', es la que nos permitirá descubrir si nuestras estrategias están bien dirigidas o si están siendo confundidas por factores que no vemos."
+:::
+
+## La Visión Agregada: No Contactar Parece lo Mejor
+
+```{r grafico-agregado, echo=FALSE, fig.align='center', out.width="80%"}
+# Filtramos los datos para mostrar SOLO el resultado agregado
+resumen_agregado <- resumen_simulacion |>
+  dplyr::filter(grupo_cultura == "Agregado")
+
+# Generamos un gráfico específico para esta diapositiva
+graficar_paradoja_simpson(
+  resumen_agregado,
+  titulo = "A Nivel General, la Inacción Parece la Estrategia Ganadora",
+  subtitulo = "Tasa de regularización promedio según el tipo de primer contacto"
 )
 ```
 
-## Nuestro Experimento: Un Universo Simulado
-
-- Para responder a la pregunta, creamos un "laboratorio digital".
-
-- Generamos miles de empresas sintéticas donde conocemos una variable clave que en la vida real es invisible: su **"cultura de pago"** intrínseca.
-
 ::: {.notes}
-"Para investigar esto sin arriesgar recursos, decidimos crear un experimento mental, un universo simulado donde nosotros controlamos todas las reglas."
+"Si analizamos los resultados de todas las empresas juntas, el gráfico muestra algo sorprendente."
 
-"En este universo, cada empresa tiene una característica oculta que llamamos 'cultura de pago'. Algunas tienen una alta cultura de pago, es decir, tienen la intención de regularizar su situación pase lo que pase. Otras tienen una baja cultura de pago y son mucho menos propensas a hacerlo por sí mismas."
+"La barra más alta, la que indica la mayor tasa de regularización, corresponde a 'Ausencia de Contacto'. La conclusión inmediata sería que nuestra mejor estrategia es no gastar recursos y simplemente esperar."
 
-"Esta 'cultura de pago' es el villano de nuestra historia. Es un 'factor de confusión', porque afecta tanto a los datos que sí vemos (como el riesgo de la empresa) como al resultado final (si pagan o no), y esto puede llevarnos a conclusiones erróneas."
+"Esto parece contraintuitivo. Y, como vamos a ver, es una conclusión completamente errónea, producto de una ilusión estadística."
 :::
 
-## A Primera Vista: El Juicio Parece Perjudicial
+## La Revelación: La Estrategia Óptima está Segmentada
 
-```{r}
-#| echo: false
-#| fig-align: center
-#| out-width: "90%"
-
-print(grafico_paradoja)
+```{r grafico-completo, echo=FALSE, fig.align='center', out.width="100%"}
+# Ahora mostramos el gráfico completo, sin filtrar, con todas las facetas
+graficar_paradoja_simpson(resumen_simulacion)
 ```
 
 ::: {.notes}
-"Ahora, veamos los resultados de nuestra simulación. Este gráfico muestra el efecto promedio de iniciar un juicio sobre la probabilidad de que una empresa regularice su deuda."
+"Ahora, veamos la imagen completa. Este es el mismo análisis, pero ahora separado por la 'cultura de pago' que conocíamos en nuestra simulación."
 
-"Si nos fijamos únicamente en la barra gris, el 'Resultado General', la conclusión parece obvia y alarmante. El efecto es negativo. En promedio, las empresas a las que se les inicia juicio tienen una tasa de regularización *menor* que las que no."
+"(Señalar faceta 'Cultura Baja') Para las empresas que son 'malas pagadoras', la 'Ausencia de Contacto' es la peor estrategia. Aquí, el 'Contacto Involucrado' es, por lejos, el más efectivo."
 
-"La conclusión apresurada, y la que tomaríamos si solo miráramos los datos agregados, sería: 'Dejemos de iniciar juicios, son caros y contraproducentes'."
+"(Señalar faceta 'Cultura Alta') Para las que son 'buenas pagadoras', ocurre lo contrario. Ya tenían una alta probabilidad de pagar, por lo que cualquier contacto es un gasto de recursos innecesario. 'Ausencia de Contacto' es la estrategia más eficiente."
 
-"Pero, como les adelanté, esta conclusión es una ilusión. Es incorrecta. Permítanme mostrarles por qué."
+"La conclusión general era una ilusión. La verdadera optimización está en aplicar la estrategia correcta al segmento correcto."
 :::
 
-## La Revelación: La Historia se Invierte
+## La Causa: El Sesgo de Selección
 
-```{r}
-#| echo: false
-#| fig-align: center
-#| out-width: "90%"
+- Nuestro modelo predictivo es bueno identificando a las empresas de "Alta Cultura de Pago".
 
-# Reutilizamos el mismo gráfico, la narrativa cambia en las notas.
-print(grafico_paradoja)
-```
+- Nuestra estrategia de asignación (lógica) fue: "No molestemos a los que seguramente pagarán solos".
+
+- **Consecuencia:** Llenamos el grupo de "Ausencia de Contacto" con las mejores empresas, inflando artificialmente su tasa de éxito y haciendo que pareciera la mejor estrategia general.
 
 ::: {.notes}
-"Este es exactamente el mismo gráfico, pero ahora vamos a usar nuestro conocimiento 'secreto' de la cultura de pago para interpretar las otras dos barras."
+"La explicación es la misma que antes, pero en este nuevo contexto: el modelo predictivo funciona, pero la estrategia de decisión basada en él crea grupos que no son comparables."
 
-"(Señalar la barra verde, la de arriba) Miren lo que pasa cuando nos enfocamos solo en las empresas con 'Baja Cultura de Pago', aquellas que probablemente no pagarían solas. Para ellas, iniciar un juicio tiene un efecto fuertemente *positivo*. Es la herramienta correcta, aplicada al grupo correcto, y funciona."
-
-"(Señalar la barra roja, la del medio) Ahora, para las empresas con 'Alta Cultura de Pago', aquellas que iban a pagar de todos modos, el efecto del juicio es negativo. Es una acción innecesaria y quizás hasta molesta para ellas."
-
-"El efecto negativo que vimos al principio era un promedio engañoso, una ilusión estadística conocida como la Paradoja de Simpson."
+"Estamos comparando peras con manzanas. El grupo 'Sin Contacto' está lleno de empresas excelentes, mientras que los grupos de contacto activo están llenos de los casos más difíciles. Por eso el promedio general es engañoso."
 :::
 
-## ¿Por Qué Ocurre Esto? El Sesgo de Selección
-
-- El modelo predictivo, al ser tan preciso, identificaba correctamente a las empresas de "Alta Cultura de Pago" y a las de "Baja Cultura de Pago".
-
-- Nuestra estrategia (racional) fue: **no iniciar juicio a los que probablemente pagarán solos.**
-
-- **Consecuencia:** Asignamos el "no tratamiento" al grupo "bueno" y el "tratamiento" (juicio) al grupo "malo", haciendo imposible una comparación justa.
-
-::: {.notes}
-"Entonces, ¿cuál es la explicación? No es que el modelo predictivo fallara. De hecho, hizo su trabajo perfectamente."
-
-"El problema surgió de la estrategia que construimos sobre esa predicción. De forma muy lógica, decidimos no gastar recursos en las empresas que el modelo nos decía que pagarían solas. Y decidimos enfocar nuestros esfuerzos (iniciar juicios) en las que parecían casos perdidos."
-
-"Al hacer esto, introdujimos un sesgo de selección masivo. Llenamos el grupo 'Sin Juicio' con las mejores empresas y el grupo 'Con Juicio' con las peores. Naturalmente, al comparar los promedios de estos dos grupos, el primero se veía mucho mejor, pero no por nuestra acción, sino por cómo estaban compuestos los grupos desde el principio."
-:::
-
-## Conclusiones y Próximos Pasos
+## Conclusiones y Recomendación Accionable
 
 ### Conclusiones
 
-1.  La **precisión predictiva no es suficiente** para medir el impacto causal de nuestras acciones.
-2.  Una estrategia basada únicamente en predicciones puede llevar a conclusiones erróneas y a una asignación de recursos subóptima.
+1.  Una estrategia de contacto de “talla única” es ineficiente y subóptima.
+2.  La optimización real de recursos proviene de aplicar la intervención correcta al segmento causal correcto.
 
 ### Recomendación
 
-Debemos **complementar nuestros modelos predictivos con técnicas de inferencia causal**, como experimentos controlados (A/B testing), para medir el verdadero impacto de nuestras intervenciones.
+Proponemos un **piloto de A/B testing** en el segmento de "primer contacto" para medir el impacto causal real de las estrategias "Ligera" vs. "Involucrada" y validar estos hallazgos.
 
 ::: {.notes}
-"Para concluir, ¿qué hemos aprendido de este experimento?"
+"La lección principal de esta simulación es que debemos pasar de una estrategia basada solo en predicción a una basada en causalidad y segmentación."
 
-"Primero, y más importante, que un modelo predictivo excelente no es una bola de cristal para la toma de decisiones. Nos dice qué es probable que pase, pero no nos dice cuál es la mejor manera de cambiar ese resultado. La precisión no implica causalidad."
-
-"Segundo, que si no somos cuidadosos, nuestras estrategias pueden introducir sesgos que nos lleven a conclusiones completamente equivocadas, como la que vimos hoy."
-
-"Nuestra recomendación no es abandonar los modelos predictivos, sino todo lo contrario: aumentarlos. Debemos empezar a incorporar prácticas de inferencia causal. La forma más sencilla y robusta de hacerlo es través de experimentos controlados, también conocidos como A/B testing. Proponemos lanzar un piloto en la próxima campaña de cobros para medir, sin lugar a dudas, el impacto real de nuestras acciones y asegurarnos de que estamos aplicando la estrategia correcta al grupo correcto."
+"Como próximo paso concreto, proponemos tomar estos aprendizajes y llevarlos al mundo real. Diseñemos un experimento controlado donde a un grupo aleatorio de empresas difíciles se les asigne un contacto ligero y a otro un contacto involucrado. Solo así podremos medir el verdadero retorno de la inversión de nuestras acciones y tomar decisiones basadas en evidencia causal."
 
 "Gracias."
+:::
+
+
+## Anexo {.inverse}
+
+
+## Anatomía de la Simulación
+### El Proceso de Generación de Datos (DGP)
+
+::: {.notes}
+"Para aquellos interesados en los detalles técnicos, las siguientes diapositivas explican exactamente cómo construimos nuestro universo simulado. Nuestro objetivo aquí es la total transparencia."
+:::
+
+
+## La Receta: Pasos Clave del DGP
+
+1.  **Crear Universo Inicial:** Generamos una población grande y realista de empresas.
+2.  **Filtrar Segmento Clave:** Nos enfocamos en el segmento estratégico: deudas antiguas, sin contacto previo.
+3.  **Asignar 'Cultura de Pago':** A cada empresa del segmento le asignamos aleatoriamente una "cultura de pago" oculta (Baja, Media o Alta). Este es nuestro *confounder*.
+4.  **Generar Datos Observables:** Creamos variables realistas (como `riesgo_deuda`) cuya distribución depende de la cultura de pago.
+5.  **Simular Decisión del BPS:** Asignamos el tipo de contacto (`Ausencia`, `Ligero`, `Involucrado`) de forma sesgada, usando un modelo predictivo "casi perfecto".
+
+::: {.notes}
+"El proceso sigue una secuencia lógica. Primero definimos el quiénes (el segmento), luego introducimos la variable oculta que causa la confusión, y finalmente simulamos la toma de decisiones del BPS que introduce el sesgo de selección que queremos estudiar."
+:::
+
+## El Motor Causal: De Variables a Resultados
+
+A continuación, se desglosa el código que define la "verdad" de nuestro universo para el resultado potencial `Y_ausencia` (la regularización si no hay contacto).
+
+```{r logit-code-detailed-1, echo=TRUE, eval=FALSE}
+logit_baseline = -2.5 + (as.integer(cultura_pago_real) * 2.5) - (riesgo_deuda * 0.5)
+Y_ausencia = rbinom(n(), 1, plogis(logit_baseline))
+```
+
+#### Desglose de la Lógica:
+
+**1. `logit_baseline` (La "Puntuación de Voluntad de Pago"):**  
+-   ` -2.5`: **El Intercepto.** Es el punto de partida; un valor negativo que representa la dificultad inherente de que alguien pague sin una buena razón.  
+-   `(as.integer(cultura_pago_real) * 2.5)`: **El Factor Causal Oculto.** El motor principal. La `cultura_pago_real` (convertida a 1, 2, 3) tiene el mayor impacto positivo. Es el *confounder*.  
+-   `- (riesgo_deuda * 0.5)`: **El Factor Observable.** A mayor `riesgo_deuda`, menor es la puntuación, añadiendo realismo.  
+
+::: {.notes}
+"Vamos a desglosar estas dos líneas de código, que son el cerebro de toda la simulación."
+
+"Primero, calculamos una 'puntuación de voluntad de pago'. Empezamos con un entorno difícil (el -2.5), luego le damos un gran impulso a las empresas con buena cultura de pago (el factor más importante) y penalizamos un poco a las que tienen más riesgo."
+
+"Esta puntuación no es una probabilidad, así que usamos `plogis` como un conversor estándar para transformarla en una probabilidad entre 0% y 100%."
+
+:::
+
+## El Motor Causal: De Variables a Resultados
+
+A continuación, se desglosa el código que define la "verdad" de nuestro universo para el resultado potencial `Y_ausencia` (la regularización si no hay contacto).
+
+```{r logit-code-detailed-2, echo=TRUE, eval=FALSE}
+logit_baseline = -2.5 + (as.integer(cultura_pago_real) * 2.5) - (riesgo_deuda * 0.5)
+Y_ausencia = rbinom(n(), 1, plogis(logit_baseline))
+```
+
+#### Desglose de la Lógica:
+
+**2. `plogis(...)` (De Puntuación a Probabilidad):**
+-   La "puntuación" logit puede ser cualquier número. `plogis` (la función logística inversa) la transforma matemáticamente en una **probabilidad válida**, siempre entre 0 y 1.
+
+::: {.notes}
+"Esta puntuación no es una probabilidad, así que usamos `plogis` como un conversor estándar para transformarla en una probabilidad entre 0% y 100%."
+
+:::
+
+## El Motor Causal: De Variables a Resultados
+
+A continuación, se desglosa el código que define la "verdad" de nuestro universo para el resultado potencial `Y_ausencia` (la regularización si no hay contacto).
+
+```{r logit-code-detailed-3, echo=TRUE, eval=FALSE}
+logit_baseline = -2.5 + (as.integer(cultura_pago_real) * 2.5) - (riesgo_deuda * 0.5)
+Y_ausencia = rbinom(n(), 1, plogis(logit_baseline))
+```
+
+#### Desglose de la Lógica:
+
+**3. `Y_ausencia` (El Resultado Potencial):**
+-   Esta variable representa el escenario hipotético: ¿qué empresas regularizarían (`1`) y cuáles no (`0`) si **todas** fueran asignadas al grupo de "Ausencia de Contacto"?
+
+::: {.notes}
+"`Y_ausencia` es nuestra primera 'verdad'. Es una columna que dice, para cada empresa, si pagaría o no si no hiciéramos nada."
+:::
+
+## El Motor Causal: De Variables a Resultados
+
+A continuación, se desglosa el código que define la "verdad" de nuestro universo para el resultado potencial `Y_ausencia` (la regularización si no hay contacto).
+
+```{r logit-code-detailed-4, echo=TRUE, eval=FALSE}
+logit_baseline = -2.5 + (as.integer(cultura_pago_real) * 2.5) - (riesgo_deuda * 0.5)
+Y_ausencia = rbinom(n(), 1, plogis(logit_baseline))
+```
+
+#### Desglose de la Lógica:
+
+**4. `rbinom(...)` (El "Tiro de Moneda"):**
+-   Una empresa con 80% de probabilidad no puede "80% pagar". `rbinom` simula el evento aleatorio. Para cada empresa, "lanza una moneda" (`size = 1`) que está sesgada con la probabilidad que calculamos. Esto introduce el azar del mundo real y genera el resultado final (`0` o `1`).
+
+::: {.notes}
+"Finalmente, `rbinom` es el factor suerte. Si una empresa tiene un 80% de probabilidad de pagar, `rbinom` simula un evento que resultará en 'paga' (1) el 80% de las veces y 'no paga' (0) el 20% restante. Así pasamos de una probabilidad a un hecho concreto."
+:::
+
+## La Decisión Sesgada: Asignación de Tratamiento
+
+Simulamos una estrategia racional: no gastar recursos en quienes tienen alta probabilidad de pagar, y usar los contactos más intensivos en los casos más difíciles.
+
+El código que implementa esta regla de negocio es:
+
+```{r case-when-code, echo=TRUE, eval=FALSE}
+# ... dentro de un mutate() ...
+tipo_contacto_BPS = case_when(
+  prob_predictiva_modelo > 0.8 ~ "Ausencia de Contacto",
+  prob_predictiva_modelo > 0.5 ~ "Contacto Ligero",
+  TRUE                        ~ "Contacto Involucrado"
+)
+```
+
+::: {.notes}
+"Este fragmento de código es el que introduce deliberadamente el sesgo de selección. Asignamos el tratamiento 'fácil' (Ausencia de Contacto) a las empresas con la predicción más alta, que, como vimos, están correlacionadas con la 'Cultura de Pago Alta'."
+
+"Es esta asignación, aunque parezca lógica desde el punto de vista de recursos, la que genera la Paradoja de Simpson en los resultados agregados."
 :::

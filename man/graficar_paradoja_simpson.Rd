@@ -2,18 +2,18 @@
 % Please edit documentation in R/graficar_paradoja_simpson.R
 \name{graficar_paradoja_simpson}
 \alias{graficar_paradoja_simpson}
-\title{Genera una Visualización de la Paradoja de Simpson}
+\title{Genera una Visualización Facetada de la Paradoja de Simpson (Versión 2)}
 \usage{
 graficar_paradoja_simpson(
   datos_resumen,
-  titulo = "El Juicio Parece Contraproducente, Pero es Efectivo para el Grupo Correcto",
+  titulo = "La Estrategia 'Óptima' Cambia Según el Segmento de Cliente",
   subtitulo =
-    "Comparación del Efecto de Tratamiento Promedio (ATE) Agregado vs. Segmentado"
+    "La tasa de regularización muestra que la mejor intervención no es la misma para todos"
 )
 }
 \arguments{
-\item{datos_resumen}{Un \code{tibble} o \code{data.frame} que contiene los resultados
-resumidos, usualmente la salida de \code{resumir_simulacion()}.}
+\item{datos_resumen}{Un \code{tibble} o \code{data.frame} en formato largo y tidy,
+usualmente la salida de \code{resumir_simulacion()}.}
 
 \item{titulo}{El título principal del gráfico.}
 
@@ -24,19 +24,22 @@ Un objeto de clase \code{ggplot} que puede ser impreso o modificado
 posteriormente.
 }
 \description{
-Esta función toma los resultados resumidos de la simulación Monte Carlo y
-genera un gráfico de barras con barras de error. El gráfico está diseñado
-para ilustrar de manera clara y persuasiva la Paradoja de Simpson,
-mostrando cómo el efecto de tratamiento agregado (naive) puede ser engañoso
-en comparación con los efectos segmentados.
+Esta función toma los resultados resumidos y tidy de la simulación Monte Carlo
+y genera un gráfico de barras facetado. El gráfico está diseñado para
+comparar de forma clara y directa el efecto de los diferentes tipos de contacto
+a través de los distintos subgrupos de cultura de pago, revelando así la
+Paradoja de Simpson en un formato visualmente intuitivo.
 }
 \examples{
 try({ # try() para evitar errores en CRAN si los paquetes no están
   # 1. Ejecutar y resumir una simulación
-  resumen <- resumir_simulacion(
-    ejecutar_simulacion_mc(N_simulaciones = 100, n_empresas = 1000)
+  resultados_mc <- ejecutar_simulacion_mc(
+    N_simulaciones = 10,
+    n_empresas_total = 10000
   )
-  # 2. Generar el gráfico
+  resumen <- resumir_simulacion(resultados_mc)
+
+  # 2. Generar el gráfico facetado
   grafico_paradoja <- graficar_paradoja_simpson(resumen)
   print(grafico_paradoja)
 })

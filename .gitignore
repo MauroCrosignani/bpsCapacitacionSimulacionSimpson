@@ -9,6 +9,11 @@
 # User-specific files
 .Ruserdata
 
+*.html
+*_cache/
+/presentacion_cache/
+/presentacion_files/
+
 # Example code in package build process
 *-Ex.R
 
@@ -48,10 +53,7 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-*.html
-*_cache/
-/presentacion_cache/
-/presentacion_files/
+
 
 # Archivos de {renv}
 renv/library/

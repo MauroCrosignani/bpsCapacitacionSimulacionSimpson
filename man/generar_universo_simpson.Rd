@@ -2,52 +2,56 @@
 % Please edit documentation in R/generar_universo_simpson.R
 \name{generar_universo_simpson}
 \alias{generar_universo_simpson}
-\title{Genera un Universo de Datos para Demostrar la Paradoja de Simpson}
+\title{Genera un Universo de Datos Simulado para la Paradoja de Simpson (Versión 2)}
 \usage{
 generar_universo_simpson(
-  n_empresas = 10000,
+  n_empresas_total = 1e+05,
   semilla = 42,
+  umbral_antiguedad_meses = 12,
   modo_depuracion = FALSE,
-  p_cultura_alta = 0.5,
-  efecto_juicio_cultura_baja = 1.5,
-  efecto_juicio_cultura_alta = -1
+  p_baja = 0.2,
+  p_media = 0.5
 )
 }
 \arguments{
-\item{n_empresas}{Número total de empresas a simular.}
+\item{n_empresas_total}{Número total de empresas a generar en la población inicial,
+antes del filtrado.}
 
 \item{semilla}{Un número entero para fijar la semilla aleatoria y garantizar la
 reproducibilidad.}
 
+\item{umbral_antiguedad_meses}{La antigüedad mínima de la deuda (en meses) para que
+una empresa sea incluida en la población objetivo.}
+
 \item{modo_depuracion}{Booleano. Si es \code{TRUE}, imprime mensajes de diagnóstico
 intermedios durante la generación de datos.}
 
-\item{p_cultura_alta}{La probabilidad de que una empresa tenga una "Alta"
-cultura de pago.}
+\item{p_baja}{Probabilidad de que una empresa en la población objetivo tenga
+una "Baja" cultura de pago.}
 
-\item{efecto_juicio_cultura_baja}{El efecto causal real (en la escala log-odds)
-de iniciar un juicio para empresas con "Baja" cultura de pago. Un valor
-positivo significa que el juicio aumenta la probabilidad de regularización.}
-
-\item{efecto_juicio_cultura_alta}{El efecto causal real (en la escala log-odds)
-de iniciar un juicio para empresas con "Alta" cultura de pago. Un valor
-negativo significa que el juicio disminuye la probabilidad de regularización.}
+\item{p_media}{Probabilidad de que una empresa en la población objetivo tenga
+una "Media" cultura de pago. La probabilidad de "Alta" se calcula como
+\code{1 - p_baja - p_media}.}
 }
 \value{
-Un \code{tibble} con \code{n_empresas} filas y las siguientes columnas:
-\code{id_empresa}, \code{cultura_pago_real}, \code{riesgo_deuda}, \code{antiguedad_deuda_cat},
-\code{prob_predictiva_modelo}, \code{decision_juicio_BPS}, \code{regularizacion_observada}.
+Un \code{tibble} con la \strong{población objetivo ya filtrada} y las siguientes
+columnas: \code{id_empresa}, \code{cultura_pago_real}, \code{riesgo_deuda},
+\code{antiguedad_deuda_cat}, \code{prob_predictiva_modelo}, \code{tipo_contacto_BPS},
+\code{regularizacion_observada}.
 }
 \description{
-Esta función genera un data.frame (tibble) sintético que ilustra la
-Paradoja de Simpson en un contexto simulado de gestión de cobranzas.
-Crea un escenario donde una variable confusora no observada (\code{cultura_pago_real})
-invierte la conclusión sobre la efectividad de una intervención (\code{decision_juicio_BPS})
-en un resultado (\code{regularizacion_observada}).
+Esta función implementa un Proceso de Generación de Datos (DGP) avanzado para
+ilustrar la Paradoja de Simpson en un contexto de negocio realista para el BPS.
+Primero, genera una población grande de empresas y luego la filtra para
+obtener una "población objetivo" específica (ej. antigüedad de deuda mínima,
+sin contacto previo). Sobre esta población, asigna tratamientos multivaluados
+("Ausencia de Contacto", "Contacto Ligero", "Contacto Involucrado") de forma
+sesgada, basándose en un modelo predictivo de alta precisión, para demostrar
+cómo las conclusiones a nivel agregado pueden ser engañosas.
 }
 \examples{
 try({ # try() para evitar errores en CRAN si los paquetes no están
-  universo_simulado <- generar_universo_simpson(n_empresas = 1000, semilla = 123)
-  head(universo_simulado)
+  universo_objetivo <- generar_universo_simpson(n_empresas_total = 10000)
+  head(universo_objetivo)
 })
 }
